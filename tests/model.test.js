@@ -48,3 +48,65 @@ test("toDevice survives a device with nothing set", () => {
   assert.equal(device.isPresent, false)
   assert.equal(device.connection, "Unknown")
 })
+
+test("audio device types match on type alone", () => {
+  const types = [
+    Model.DeviceType.Headset,
+    Model.DeviceType.Headphones,
+    Model.DeviceType.Speakers,
+    Model.DeviceType.OtherAudio
+  ]
+  for (const type of types) {
+    const device = Model.toDevice({ model: "Nameless", type, nativePath: "/x" })
+    assert.equal(Model.isAudioDevice(device), true, `type ${type} should match`)
+  }
+})
+
+test("non-audio types never match, whatever they are called", () => {
+  const device = Model.toDevice({
+    model: "Logitech MX Master",
+    type: Model.DeviceType.Mouse,
+    nativePath: "/x"
+  })
+  assert.equal(Model.isAudioDevice(device), false)
+})
+
+test("ambiguous types fall back to the keyword list", () => {
+  const bluetooth = Model.toDevice({
+    model: "Sony WH-1000XM4",
+    type: Model.DeviceType.BluetoothGeneric,
+    nativePath: "/org/bluez/hci0/dev_AC"
+  })
+  const unknown = Model.toDevice({
+    model: "SteelSeries Arctis 7",
+    type: Model.DeviceType.Unknown,
+    nativePath: "/sys/devices/usb1"
+  })
+  assert.equal(Model.isAudioDevice(bluetooth), true)
+  assert.equal(Model.isAudioDevice(unknown), true)
+})
+
+test("an ambiguous device nobody recognises does not match", () => {
+  const device = Model.toDevice({
+    model: "Acme Widget 3000",
+    type: Model.DeviceType.BluetoothGeneric,
+    nativePath: "/org/bluez/hci0/dev_11"
+  })
+  assert.equal(Model.isAudioDevice(device), false)
+})
+
+test("the keyword list also matches against the native path", () => {
+  const device = Model.toDevice({
+    model: "",
+    type: Model.DeviceType.Unknown,
+    nativePath: "/sys/devices/usb1/1-2/hyperx_cloud"
+  })
+  assert.equal(Model.isAudioDevice(device), true)
+})
+
+test("keyword matching ignores case", () => {
+  assert.equal(Model.matchesKeyword("JABRA ELITE 85H"), true)
+  assert.equal(Model.matchesKeyword("Bose QuietComfort 45"), true)
+  assert.equal(Model.matchesKeyword(""), false)
+  assert.equal(Model.matchesKeyword(null), false)
+})

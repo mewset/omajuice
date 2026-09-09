@@ -71,11 +71,54 @@ function toDevice(source) {
   }
 }
 
+// Ported from HeadsetManager.cpp in the HeadsetStatus project. Deliberately
+// vendor-broad: a false positive shows one extra battery level, a false
+// negative hides the device the plugin was installed for.
+var KEYWORDS = [
+  "headset", "headphone", "earphone", "earbud",
+  "jabra", "bose", "sony", "sennheiser", "jbl", "beats",
+  "hyperx", "steelseries", "razer", "logitech", "corsair",
+  "plantronics", "poly", "audio-technica", "beyerdynamic",
+  "akg", "skullcandy", "anker", "soundcore", "airpods",
+  "galaxy buds", "pixel buds", "surface headphones",
+  "wh-", "wf-", "qc", "quietcomfort", "evolve"
+]
+
+// UPower knows these are audio devices, so no guessing is needed.
+var AUDIO_TYPES = [
+  DeviceType.Headset,
+  DeviceType.Headphones,
+  DeviceType.Speakers,
+  DeviceType.OtherAudio
+]
+
+// UPower has told us nothing useful, which is the common case for Bluetooth.
+var AMBIGUOUS_TYPES = [DeviceType.Unknown, DeviceType.BluetoothGeneric]
+
+function matchesKeyword(text) {
+  var haystack = String(text || "").toLowerCase()
+  if (haystack === "") return false
+  for (var i = 0; i < KEYWORDS.length; i++) {
+    if (haystack.indexOf(KEYWORDS[i]) !== -1) return true
+  }
+  return false
+}
+
+function isAudioDevice(device) {
+  var type = Number(device.type)
+  if (AUDIO_TYPES.indexOf(type) !== -1) return true
+  if (AMBIGUOUS_TYPES.indexOf(type) === -1) return false
+  return matchesKeyword(device.model) || matchesKeyword(device.nativePath)
+}
+
 if (typeof module !== "undefined") {
   module.exports = {
     DeviceType: DeviceType,
     DeviceState: DeviceState,
     connectionFor: connectionFor,
-    toDevice: toDevice
+    toDevice: toDevice,
+    KEYWORDS: KEYWORDS,
+    matchesKeyword: matchesKeyword,
+    isAudioDevice: isAudioDevice
   }
 }
