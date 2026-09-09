@@ -111,6 +111,56 @@ function isAudioDevice(device) {
   return matchesKeyword(device.model) || matchesKeyword(device.nativePath)
 }
 
+// The bar already ships a laptop battery widget, and the mains supply has no
+// battery to report, so both are dropped before anything else is considered.
+function selectDevices(devices, showAllDevices) {
+  var list = devices || []
+  var out = []
+
+  for (var i = 0; i < list.length; i++) {
+    var candidate = list[i]
+    if (candidate.isLaptopBattery === true) continue
+    if (candidate.powerSupply === true) continue
+    if (Number(candidate.type) === DeviceType.LinePower) continue
+    if (showAllDevices !== true && !isAudioDevice(candidate)) continue
+    out.push(candidate)
+  }
+
+  out.sort(function (left, right) {
+    return Number(left.percentage) - Number(right.percentage)
+  })
+
+  return out
+}
+
+function summarize(devices) {
+  var list = devices || []
+  var usable = []
+  var charging = false
+
+  for (var i = 0; i < list.length; i++) {
+    if (list[i].isPresent !== true) continue
+    usable.push(list[i])
+    if (Number(list[i].state) === DeviceState.Charging) charging = true
+  }
+
+  if (usable.length === 0) {
+    return { count: 0, lowest: -1, charging: false, device: null }
+  }
+
+  var lowest = usable[0]
+  for (var j = 1; j < usable.length; j++) {
+    if (Number(usable[j].percentage) < Number(lowest.percentage)) lowest = usable[j]
+  }
+
+  return {
+    count: usable.length,
+    lowest: Number(lowest.percentage),
+    charging: charging,
+    device: lowest
+  }
+}
+
 if (typeof module !== "undefined") {
   module.exports = {
     DeviceType: DeviceType,
@@ -119,6 +169,8 @@ if (typeof module !== "undefined") {
     toDevice: toDevice,
     KEYWORDS: KEYWORDS,
     matchesKeyword: matchesKeyword,
-    isAudioDevice: isAudioDevice
+    isAudioDevice: isAudioDevice,
+    selectDevices: selectDevices,
+    summarize: summarize
   }
 }

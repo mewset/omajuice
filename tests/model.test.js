@@ -110,3 +110,87 @@ test("keyword matching ignores case", () => {
   assert.equal(Model.matchesKeyword(""), false)
   assert.equal(Model.matchesKeyword(null), false)
 })
+
+function device(overrides) {
+  return Model.toDevice(Object.assign({
+    model: "Jabra Evolve2 65",
+    type: Model.DeviceType.Headset,
+    percentage: 50,
+    state: Model.DeviceState.Discharging,
+    isPresent: true,
+    nativePath: "/org/bluez/hci0/dev_AC"
+  }, overrides))
+}
+
+test("selectDevices keeps audio devices and drops the rest", () => {
+  const devices = [
+    device({ model: "Jabra Evolve2 65", nativePath: "/a" }),
+    device({ model: "Dell Monitor", type: Model.DeviceType.Monitor, nativePath: "/b" })
+  ]
+  const selected = Model.selectDevices(devices, false)
+  assert.equal(selected.length, 1)
+  assert.equal(selected[0].model, "Jabra Evolve2 65")
+})
+
+test("selectDevices with showAllDevices keeps every peripheral", () => {
+  const devices = [
+    device({ model: "Jabra Evolve2 65", nativePath: "/a" }),
+    device({ model: "Logitech MX Master", type: Model.DeviceType.Mouse, nativePath: "/b" })
+  ]
+  assert.equal(Model.selectDevices(devices, true).length, 2)
+})
+
+test("selectDevices always drops the laptop battery and the mains supply", () => {
+  const devices = [
+    device({ model: "Internal Battery", type: Model.DeviceType.Battery, isLaptopBattery: true, nativePath: "/a" }),
+    device({ model: "AC Adapter", type: Model.DeviceType.LinePower, nativePath: "/b" }),
+    device({ model: "Some Battery", type: Model.DeviceType.Battery, powerSupply: true, nativePath: "/c" })
+  ]
+  assert.equal(Model.selectDevices(devices, true).length, 0)
+})
+
+test("selectDevices sorts by level ascending and leaves the input alone", () => {
+  const devices = [
+    device({ percentage: 80, nativePath: "/a" }),
+    device({ percentage: 12, nativePath: "/b" }),
+    device({ percentage: 45, nativePath: "/c" })
+  ]
+  const selected = Model.selectDevices(devices, false)
+  assert.deepEqual(selected.map(d => d.percentage), [12, 45, 80])
+  assert.equal(devices[0].percentage, 80)
+})
+
+test("summarize reports the lowest level and the count", () => {
+  const summary = Model.summarize([
+    device({ percentage: 12, nativePath: "/a" }),
+    device({ percentage: 80, nativePath: "/b" })
+  ])
+  assert.equal(summary.count, 2)
+  assert.equal(summary.lowest, 12)
+  assert.equal(summary.device.percentage, 12)
+  assert.equal(summary.charging, false)
+})
+
+test("summarize reports charging when any device is charging", () => {
+  const summary = Model.summarize([
+    device({ percentage: 12, state: Model.DeviceState.Charging, nativePath: "/a" })
+  ])
+  assert.equal(summary.charging, true)
+})
+
+test("summarize ignores absent devices so they cannot drag the reading down", () => {
+  const summary = Model.summarize([
+    device({ percentage: 0, isPresent: false, nativePath: "/a" }),
+    device({ percentage: 60, nativePath: "/b" })
+  ])
+  assert.equal(summary.count, 1)
+  assert.equal(summary.lowest, 60)
+})
+
+test("summarize on an empty list reports nothing", () => {
+  const summary = Model.summarize([])
+  assert.equal(summary.count, 0)
+  assert.equal(summary.lowest, -1)
+  assert.equal(summary.device, null)
+  assert.equal(summary.charging, false)
+})
