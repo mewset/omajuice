@@ -2,7 +2,7 @@
   "schemaVersion": 1,
   "id": "io.github.mewset.omajuice",
   "name": "omajuice",
-  "version": "0.1.0",
+  "version": "1.0.0",
   "author": "Mattias Andersson",
   "license": "MIT",
   "description": "Headset battery in the bar: level, charge state and connection for every wireless or USB headset UPower knows about, with low battery, fully charged and disconnect notifications. No helper process and no daemon.",
