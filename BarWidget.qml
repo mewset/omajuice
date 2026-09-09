@@ -28,6 +28,33 @@ BarWidget {
   readonly property int lowBatteryThreshold: Number(setting("lowBatteryThreshold", 20))
   readonly property bool opened: panelLoader.item ? panelLoader.item.opened === true : false
 
+  // Shared between both orientations so charging state, the urgent
+  // threshold and the font are decided in one place rather than twice.
+  //
+  // Nerd Font glyphs, not emoji: emoji are rendered by the colour emoji
+  // font regardless of font.family, so they carry their own size and
+  // baseline and stick out next to every other (Nerd Font) glyph in the
+  // bar. U+F02CB is the headphones glyph, the same one the shell's own
+  // audio plugin uses for headphones (Panel.qml's outputIcon, "isHeadphones"
+  // branch). U+F0084 is the battery-charging glyph from the same Material
+  // Design Nerd Font family.
+  readonly property string deviceGlyph: summary.charging ? "\u{f0084}" : "\u{f02cb}"
+  readonly property string barFontFamily: bar ? bar.fontFamily : Style.fontFamily
+  readonly property color barForeground: bar ? bar.barForeground : Color.foreground
+  readonly property color levelColor: summary.lowest >= 0 && summary.lowest <= lowBatteryThreshold
+    ? (bar ? bar.urgent : Color.urgent)
+    : barForeground
+
+  // One row per line in a vertical bar: icon first, then the lowest level
+  // (no "%" - it would push a 3-digit reading past 3 characters and trigger
+  // OpticalGlyph's shrink-to-fit), then the count only when it says
+  // something the level alone doesn't.
+  readonly property var verticalRows: [
+    { text: deviceGlyph, size: Style.bar.iconFont, color: barForeground },
+    { text: String(summary.lowest), size: Style.font.body, color: levelColor, shown: summary.count > 0 },
+    { text: "×" + summary.count, size: Style.font.body, color: levelColor, shown: summary.count > 1 }
+  ]
+
   // The shell hands settings to widgets only, so the service is told here.
   // Every monitor pushes the same object, which is why applySettings must be
   // idempotent.
@@ -82,20 +109,22 @@ BarWidget {
   MouseArea {
     id: button
     anchors.fill: parent
-    implicitWidth: row.implicitWidth + Style.space(8)
-    implicitHeight: row.implicitHeight
+    implicitWidth: root.vertical ? root.barSize : row.implicitWidth + Style.space(8)
+    implicitHeight: root.vertical ? column.implicitHeight : row.implicitHeight
     onClicked: root.toggle()
 
+    // Horizontal bar: icon and level side by side on one line.
     Row {
       id: row
+      visible: !root.vertical
       anchors.centerIn: parent
       spacing: Style.space(4)
 
       Text {
         anchors.verticalCenter: parent.verticalCenter
-        text: root.summary.charging ? "⚡" : "\u{1f3a7}"
-        color: root.bar ? root.bar.barForeground : Color.foreground
-        font.family: root.bar ? root.bar.fontFamily : Style.fontFamily
+        text: root.deviceGlyph
+        color: root.barForeground
+        font.family: root.barFontFamily
         font.pixelSize: Style.bar.iconFont
       }
 
@@ -105,11 +134,34 @@ BarWidget {
         text: root.summary.count > 1
           ? root.summary.lowest + "% · " + root.summary.count
           : root.summary.lowest + "%"
-        color: root.summary.lowest >= 0 && root.summary.lowest <= root.lowBatteryThreshold
-          ? (root.bar ? root.bar.urgent : Color.urgent)
-          : (root.bar ? root.bar.barForeground : Color.foreground)
-        font.family: root.bar ? root.bar.fontFamily : Style.fontFamily
+        color: root.levelColor
+        font.family: root.barFontFamily
         font.pixelSize: Style.font.body
+      }
+    }
+
+    // Vertical bar: the slot is pinned to bar thickness (ModuleSlot in
+    // Bar.qml), too narrow for the horizontal line, so icon and level stack
+    // in icon-sized rows instead - the same answer the clock plugin gives
+    // to a vertical bar.
+    Column {
+      id: column
+      visible: root.vertical
+      anchors.fill: parent
+
+      Repeater {
+        model: root.verticalRows
+
+        OpticalGlyph {
+          required property var modelData
+          visible: modelData.shown !== false
+          width: column.width
+          height: Style.bar.iconSlot
+          text: modelData.text
+          fontFamily: root.barFontFamily
+          fontSize: modelData.size
+          color: modelData.color
+        }
       }
     }
   }
