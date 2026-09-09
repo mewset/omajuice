@@ -60,85 +60,102 @@ Panel {
     bar: root.bar
     owner: root.barIdentity
     open: root.opened
+    focusTarget: keyCatcher
     contentWidth: popup.fittedContentWidth(Style.space(300))
     contentHeight: popup.fittedContentHeight(column.implicitHeight)
 
-    ColumnLayout {
-      id: column
+    // KeyboardPanel primes layer-shell keyboard focus on open regardless of
+    // whether the panel has anything worth navigating - see its own comment
+    // on why Qt still needs an in-surface focus target before Escape (or any
+    // other key) actually reaches a handler. Without one, focus is taken from
+    // whatever the user was typing in and never given back. This panel has
+    // exactly one control and no cursor to move between rows, so it wires
+    // only the close and tab-switch signals every first-party panel wires -
+    // not the arrow-key/activate cursor machinery those panels add on top
+    // for navigating a list, which this panel has no use for.
+    PanelKeyCatcher {
+      id: keyCatcher
       anchors.fill: parent
-      spacing: Style.space(6)
+      onCloseRequested: root.close()
+      onTabRequested: function(direction) { root.switchPanel(direction) }
 
-      // Always present, not only in the empty state - a toggle that only
-      // shows up when the list is empty would vanish the moment switching
-      // it on brings devices into view, leaving no way to switch it back
-      // off. This is a setting, not a list row, so it sits above the
-      // separator rather than among the device rows below.
-      RowLayout {
-        id: settingsRow
-        Layout.fillWidth: true
-        spacing: Style.space(10)
+      ColumnLayout {
+        id: column
+        anchors.fill: parent
+        spacing: Style.space(6)
 
-        Text {
-          Layout.fillWidth: true
-          wrapMode: Text.WordWrap
-          color: root.foreground
-          font.family: root.fontFamily
-          font.pixelSize: Style.font.body
-          text: "Show every external device"
-        }
-
-        ToggleSwitch {
-          checked: root.showAllDevices
-          foreground: root.foreground
-          onToggled: root.toggleShowAllDevices()
-        }
-      }
-
-      PanelSeparator {
-        Layout.fillWidth: true
-        foreground: root.foreground
-      }
-
-      Text {
-        visible: root.devices.length === 0
-        Layout.fillWidth: true
-        wrapMode: Text.WordWrap
-        color: root.dim
-        font.family: root.fontFamily
-        font.pixelSize: Style.font.body
-        text: root.showAllDevices ? "No external device found." : "No headset found."
-      }
-
-      Repeater {
-        model: root.devices
-
+        // Always present, not only in the empty state - a toggle that only
+        // shows up when the list is empty would vanish the moment switching
+        // it on brings devices into view, leaving no way to switch it back
+        // off. This is a setting, not a list row, so it sits above the
+        // separator rather than among the device rows below.
         RowLayout {
-          id: deviceRow
-          required property var modelData
+          id: settingsRow
           Layout.fillWidth: true
           spacing: Style.space(10)
 
           Text {
             Layout.fillWidth: true
-            elide: Text.ElideRight
+            wrapMode: Text.WordWrap
             color: root.foreground
             font.family: root.fontFamily
             font.pixelSize: Style.font.body
-            text: deviceRow.modelData.model
+            text: "Show every external device"
           }
 
-          Text {
-            color: root.dim
-            font.family: root.fontFamily
-            font.pixelSize: Style.font.bodySmall
-            text: root.stateLabel(deviceRow.modelData)
+          ToggleSwitch {
+            checked: root.showAllDevices
+            foreground: root.foreground
+            onToggled: root.toggleShowAllDevices()
           }
+        }
 
-          Text {
-            color: deviceRow.modelData.percentage <= root.lowBatteryThreshold ? root.urgent : root.foreground
-            font.family: root.fontFamily
-            font.pixelSize: Style.font.body
-            text: deviceRow.modelData.percentage + "%"
+        PanelSeparator {
+          Layout.fillWidth: true
+          foreground: root.foreground
+        }
+
+        Text {
+          visible: root.devices.length === 0
+          Layout.fillWidth: true
+          wrapMode: Text.WordWrap
+          color: root.dim
+          font.family: root.fontFamily
+          font.pixelSize: Style.font.body
+          text: root.showAllDevices ? "No external device found." : "No headset found."
+        }
+
+        Repeater {
+          model: root.devices
+
+          RowLayout {
+            id: deviceRow
+            required property var modelData
+            Layout.fillWidth: true
+            spacing: Style.space(10)
+
+            Text {
+              Layout.fillWidth: true
+              elide: Text.ElideRight
+              color: root.foreground
+              font.family: root.fontFamily
+              font.pixelSize: Style.font.body
+              text: deviceRow.modelData.model
+            }
+
+            Text {
+              color: root.dim
+              font.family: root.fontFamily
+              font.pixelSize: Style.font.bodySmall
+              text: root.stateLabel(deviceRow.modelData)
+            }
+
+            Text {
+              color: deviceRow.modelData.percentage <= root.lowBatteryThreshold ? root.urgent : root.foreground
+              font.family: root.fontFamily
+              font.pixelSize: Style.font.body
+              text: deviceRow.modelData.percentage + "%"
+            }
           }
         }
       }
