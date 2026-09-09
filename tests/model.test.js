@@ -274,3 +274,17 @@ test("arm state is dropped for devices that are gone", () => {
   const after = Model.diffEvents([device({ percentage: 5, nativePath: "/a" })], [], armed.armState, options)
   assert.equal(after.armState["/a"], undefined)
 })
+
+test("arm state is carried through when a device goes absent but stays listed", () => {
+  const armed = Model.diffEvents([], [device({ percentage: 10, nativePath: "/a" })], {}, options)
+  assert.equal(armed.events.length, 1)
+  assert.equal(armed.events[0].kind, "low")
+
+  const absent = Model.diffEvents([device({ percentage: 10, nativePath: "/a" })], [device({ isPresent: false, percentage: 10, nativePath: "/a" })], armed.armState, options)
+  assert.equal(absent.events.length, 1)
+  assert.equal(absent.events[0].kind, "disconnected")
+  assert.equal(absent.armState["/a"].lowNotified, true)
+
+  const returned = Model.diffEvents([device({ isPresent: false, percentage: 10, nativePath: "/a" })], [device({ percentage: 10, nativePath: "/a" })], absent.armState, options)
+  assert.equal(returned.events.length, 0)
+})

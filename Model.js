@@ -210,6 +210,7 @@ function diffEvents(previous, next, armState, options) {
       if (earlier && earlier.isPresent === true && settings.notifyDisconnect === true) {
         events.push(eventFor("disconnected", current))
       }
+      arm[current.key] = { lowNotified: wasArmed }
       continue
     }
 
