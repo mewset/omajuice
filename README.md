@@ -39,6 +39,15 @@ omarchy plugin add https://github.com/mewset/omajuice.git --enable
 
 Then add the widget to your bar from `Setup > Plugins`.
 
+## Remove
+
+```bash
+omarchy plugin remove io.github.mewset.omajuice
+```
+
+That takes the widget out of your bar and deletes the plugin. Nothing is left
+behind.
+
 ## Settings
 
 | Setting | Default | What it does |
