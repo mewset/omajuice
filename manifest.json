@@ -1,0 +1,71 @@
+{
+  "schemaVersion": 1,
+  "id": "io.github.mewset.omajuice",
+  "name": "omajuice",
+  "version": "0.1.0",
+  "author": "Mattias Andersson",
+  "license": "MIT",
+  "description": "Headset battery in the bar: level, charge state and connection for every wireless or USB headset UPower knows about, with low battery, fully charged and disconnect notifications. No helper process and no daemon.",
+  "kinds": ["service", "bar-widget"],
+  "entryPoints": {
+    "service": "Service.qml",
+    "barWidget": "BarWidget.qml"
+  },
+  "barWidget": {
+    "displayName": "omajuice",
+    "description": "Battery level for headsets and other external devices, read straight from UPower.",
+    "category": "System",
+    "aliases": ["juice", "headset", "headphones", "battery", "earbuds"],
+    "allowMultiple": false,
+    "defaultSection": "right",
+    "defaults": {
+      "showAllDevices": false,
+      "lowBatteryThreshold": 20,
+      "notifyLowBattery": true,
+      "notifyFullyCharged": true,
+      "notifyDisconnect": false,
+      "hideWhenEmpty": true
+    },
+    "schema": [
+      {
+        "key": "showAllDevices",
+        "type": "boolean",
+        "label": "Show every external device, not only headsets",
+        "defaultValue": false
+      },
+      {
+        "key": "lowBatteryThreshold",
+        "type": "integer",
+        "label": "Low battery threshold (percent)",
+        "min": 5,
+        "max": 50,
+        "step": 5,
+        "defaultValue": 20
+      },
+      {
+        "key": "notifyLowBattery",
+        "type": "boolean",
+        "label": "Notify on low battery",
+        "defaultValue": true
+      },
+      {
+        "key": "notifyFullyCharged",
+        "type": "boolean",
+        "label": "Notify when fully charged",
+        "defaultValue": true
+      },
+      {
+        "key": "notifyDisconnect",
+        "type": "boolean",
+        "label": "Notify on disconnect (noisy across suspend)",
+        "defaultValue": false
+      },
+      {
+        "key": "hideWhenEmpty",
+        "type": "boolean",
+        "label": "Hide the bar item when no device is found",
+        "defaultValue": true
+      }
+    ]
+  }
+}
