@@ -46,9 +46,11 @@ BarWidget {
     : barForeground
 
   // One row per line in a vertical bar: icon first, then the lowest level
-  // (no "%" - it would push a 3-digit reading past 3 characters and trigger
-  // OpticalGlyph's shrink-to-fit), then the count only when it says
-  // something the level alone doesn't.
+  // (no "%" - it would push a 3-digit reading past 3 characters, and a
+  // longer reading is exactly what the clock plugin's own vertical layout
+  // shrinks the font for, by passing a reduced fontSize into OpticalGlyph
+  // from its caller), then the count only when it says something the
+  // level alone doesn't.
   readonly property var verticalRows: [
     { text: deviceGlyph, size: Style.bar.iconFont, color: barForeground },
     { text: String(summary.lowest), size: Style.font.body, color: levelColor, shown: summary.count > 0 },
@@ -110,7 +112,13 @@ BarWidget {
     id: button
     anchors.fill: parent
     implicitWidth: root.vertical ? root.barSize : row.implicitWidth + Style.space(8)
-    implicitHeight: root.vertical ? column.implicitHeight : row.implicitHeight
+    // Horizontal: full bar thickness, like every other full-height widget
+    // (e.g. the media plugin's BarWidget.qml), so this item's click target
+    // and its open-panel indicator line up with neighbouring icons instead
+    // of only spanning the text's own height. Vertical: the stacked rows
+    // are what determines the item's length along the bar, and the slot's
+    // width is pinned regardless, so column.implicitHeight is already right.
+    implicitHeight: root.vertical ? column.implicitHeight : root.barSize
     onClicked: root.toggle()
 
     // Horizontal bar: icon and level side by side on one line.
