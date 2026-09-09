@@ -244,6 +244,47 @@ function diffEvents(previous, next, armState, options) {
   return { events: events, armState: arm }
 }
 
+var APP_NAME = "omajuice"
+
+function notificationText(event) {
+  if (event.kind === "charged") {
+    return { headline: "Fully charged", body: String(event.model) }
+  }
+  if (event.kind === "disconnected") {
+    return { headline: "Device disconnected", body: String(event.model) }
+  }
+  return {
+    headline: "Battery low",
+    body: String(event.model) + " at " + String(event.percentage) + "%"
+  }
+}
+
+function notificationIcon(event) {
+  if (event.kind === "charged") return "battery-full-charged"
+  if (event.kind === "disconnected") return "audio-headset"
+  return "battery-caution"
+}
+
+// Every value is its own array element. Nothing is ever assembled into a shell
+// string, so a device that names itself after a command cannot run one.
+function notificationCommand(event, replaceId) {
+  var text = notificationText(event)
+  var command = [
+    "omarchy-notification-send",
+    "--app-name", APP_NAME,
+    "-u", event.kind === "low" ? "critical" : "low",
+    text.headline,
+    text.body,
+    "-i", notificationIcon(event),
+    "-p"
+  ]
+
+  var id = Number(replaceId)
+  if (isFinite(id) && id > 0) command.push("-r", String(id))
+
+  return command
+}
+
 if (typeof module !== "undefined") {
   module.exports = {
     DeviceType: DeviceType,
@@ -257,6 +298,10 @@ if (typeof module !== "undefined") {
     summarize: summarize,
     HYSTERESIS: HYSTERESIS,
     defaultOptions: defaultOptions,
-    diffEvents: diffEvents
+    diffEvents: diffEvents,
+    APP_NAME: APP_NAME,
+    notificationText: notificationText,
+    notificationIcon: notificationIcon,
+    notificationCommand: notificationCommand
   }
 }

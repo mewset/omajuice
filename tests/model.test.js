@@ -288,3 +288,45 @@ test("arm state is carried through when a device goes absent but stays listed", 
   const returned = Model.diffEvents([device({ isPresent: false, percentage: 10, nativePath: "/a" })], [device({ percentage: 10, nativePath: "/a" })], absent.armState, options)
   assert.equal(returned.events.length, 0)
 })
+
+test("notification text names the device and the level", () => {
+  const low = Model.notificationText({ kind: "low", model: "Jabra Evolve2 65", percentage: 18 })
+  assert.equal(low.headline, "Battery low")
+  assert.equal(low.body, "Jabra Evolve2 65 at 18%")
+
+  const charged = Model.notificationText({ kind: "charged", model: "Sony WH-1000XM4", percentage: 100 })
+  assert.equal(charged.headline, "Fully charged")
+  assert.equal(charged.body, "Sony WH-1000XM4")
+
+  const gone = Model.notificationText({ kind: "disconnected", model: "Arctis 7", percentage: 40 })
+  assert.equal(gone.headline, "Device disconnected")
+  assert.equal(gone.body, "Arctis 7")
+})
+
+test("the notification command passes every value as its own argument", () => {
+  const command = Model.notificationCommand({ kind: "low", model: "Jabra; rm -rf /", percentage: 5 }, 0)
+  assert.equal(command[0], "omarchy-notification-send")
+  assert.equal(command.indexOf("--app-name") !== -1, true)
+  assert.equal(command[command.indexOf("--app-name") + 1], "omajuice")
+  assert.equal(command.indexOf("Jabra; rm -rf / at 5%") !== -1, true)
+  assert.equal(command[command.length - 1], "-p")
+})
+
+test("low battery is urgent, the other kinds are not", () => {
+  const low = Model.notificationCommand({ kind: "low", model: "A", percentage: 5 }, 0)
+  const charged = Model.notificationCommand({ kind: "charged", model: "A", percentage: 100 }, 0)
+  assert.equal(low[low.indexOf("-u") + 1], "critical")
+  assert.equal(charged[charged.indexOf("-u") + 1], "low")
+})
+
+test("a known id makes the notification replace the previous one", () => {
+  const command = Model.notificationCommand({ kind: "low", model: "A", percentage: 5 }, 42)
+  assert.equal(command[command.indexOf("-r") + 1], "42")
+})
+
+test("an unusable id is left out entirely", () => {
+  for (const id of [0, -1, null, undefined, NaN]) {
+    const command = Model.notificationCommand({ kind: "low", model: "A", percentage: 5 }, id)
+    assert.equal(command.indexOf("-r"), -1)
+  }
+})
