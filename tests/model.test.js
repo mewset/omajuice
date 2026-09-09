@@ -309,7 +309,22 @@ test("the notification command passes every value as its own argument", () => {
   assert.equal(command.indexOf("--app-name") !== -1, true)
   assert.equal(command[command.indexOf("--app-name") + 1], "omajuice")
   assert.equal(command.indexOf("Jabra; rm -rf / at 5%") !== -1, true)
-  assert.equal(command[command.length - 1], "-p")
+})
+
+test("the headline and body are the final two arguments, so nothing can follow the device-controlled body", () => {
+  const kinds = ["low", "charged", "disconnected"]
+  const dangerousModels = ["--exec", "-i"]
+  for (const kind of kinds) {
+    for (const model of dangerousModels) {
+      for (const replaceId of [0, 42]) {
+        const event = { kind: kind, model: model, percentage: 5 }
+        const text = Model.notificationText(event)
+        const command = Model.notificationCommand(event, replaceId)
+        assert.equal(command[command.length - 2], text.headline)
+        assert.equal(command[command.length - 1], text.body)
+      }
+    }
+  }
 })
 
 test("low battery is urgent, the other kinds are not", () => {

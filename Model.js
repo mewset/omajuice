@@ -267,20 +267,32 @@ function notificationIcon(event) {
 
 // Every value is its own array element. Nothing is ever assembled into a shell
 // string, so a device that names itself after a command cannot run one.
+//
+// All flags come before the two positionals (headline, then body), and body
+// is always last. omarchy-notification-send takes its headline and an
+// optional description as the first one or two positionals that are not a
+// recognized flag, then treats a trailing --exec as consuming the rest of
+// the line as a click command. body is device-controlled text (a Bluetooth
+// device's advertised model name), so if it were followed by more argv a
+// device could name itself a flag, or "--exec ...", and hijack that tail.
+// Putting body last means there is nothing after it left to hijack: a body
+// that happens to equal a flag can at worst make the description slot go
+// missing or the send fail, never redirect a later flag or arm a click
+// command.
 function notificationCommand(event, replaceId) {
   var text = notificationText(event)
   var command = [
     "omarchy-notification-send",
     "--app-name", APP_NAME,
     "-u", event.kind === "low" ? "critical" : "low",
-    text.headline,
-    text.body,
     "-i", notificationIcon(event),
     "-p"
   ]
 
   var id = Number(replaceId)
   if (isFinite(id) && id > 0) command.push("-r", String(id))
+
+  command.push(text.headline, text.body)
 
   return command
 }
