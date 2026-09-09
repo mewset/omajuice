@@ -194,3 +194,83 @@ test("summarize on an empty list reports nothing", () => {
   assert.equal(summary.device, null)
   assert.equal(summary.charging, false)
 })
+
+const options = { threshold: 20, notifyLowBattery: true, notifyFullyCharged: true, notifyDisconnect: true }
+
+test("a device crossing the threshold notifies once", () => {
+  const before = [device({ percentage: 30, nativePath: "/a" })]
+  const after = [device({ percentage: 18, nativePath: "/a" })]
+
+  const first = Model.diffEvents(before, after, {}, options)
+  assert.equal(first.events.length, 1)
+  assert.equal(first.events[0].kind, "low")
+  assert.equal(first.events[0].percentage, 18)
+
+  const second = Model.diffEvents(after, [device({ percentage: 15, nativePath: "/a" })], first.armState, options)
+  assert.equal(second.events.length, 0)
+})
+
+test("a charging device never reports low battery", () => {
+  const after = [device({ percentage: 5, state: Model.DeviceState.Charging, nativePath: "/a" })]
+  const result = Model.diffEvents([], after, {}, options)
+  assert.equal(result.events.length, 0)
+})
+
+test("low battery re-arms only above the threshold plus hysteresis", () => {
+  const low = [device({ percentage: 10, nativePath: "/a" })]
+  const armed = Model.diffEvents([], low, {}, options)
+  assert.equal(armed.events.length, 1)
+
+  const nudged = Model.diffEvents(low, [device({ percentage: 22, nativePath: "/a" })], armed.armState, options)
+  assert.equal(nudged.armState["/a"].lowNotified, true)
+
+  const recovered = Model.diffEvents(low, [device({ percentage: 40, nativePath: "/a" })], armed.armState, options)
+  assert.equal(recovered.armState["/a"].lowNotified, false)
+})
+
+test("reaching full charge notifies once on the transition", () => {
+  const before = [device({ percentage: 99, state: Model.DeviceState.Charging, nativePath: "/a" })]
+  const after = [device({ percentage: 100, state: Model.DeviceState.FullyCharged, nativePath: "/a" })]
+
+  const first = Model.diffEvents(before, after, {}, options)
+  assert.equal(first.events.length, 1)
+  assert.equal(first.events[0].kind, "charged")
+
+  const second = Model.diffEvents(after, after, first.armState, options)
+  assert.equal(second.events.length, 0)
+})
+
+test("a device first seen already full does not notify", () => {
+  const after = [device({ percentage: 100, state: Model.DeviceState.FullyCharged, nativePath: "/a" })]
+  const result = Model.diffEvents([], after, {}, options)
+  assert.equal(result.events.length, 0)
+})
+
+test("a device leaving the list reports a disconnect", () => {
+  const before = [device({ nativePath: "/a" })]
+  const result = Model.diffEvents(before, [], {}, options)
+  assert.equal(result.events.length, 1)
+  assert.equal(result.events[0].kind, "disconnected")
+})
+
+test("a device going absent reports a disconnect", () => {
+  const before = [device({ nativePath: "/a" })]
+  const after = [device({ isPresent: false, nativePath: "/a" })]
+  const result = Model.diffEvents(before, after, {}, options)
+  assert.equal(result.events.length, 1)
+  assert.equal(result.events[0].kind, "disconnected")
+})
+
+test("each notification kind can be switched off independently", () => {
+  const quiet = { threshold: 20, notifyLowBattery: false, notifyFullyCharged: false, notifyDisconnect: false }
+  const low = Model.diffEvents([], [device({ percentage: 5, nativePath: "/a" })], {}, quiet)
+  const gone = Model.diffEvents([device({ nativePath: "/b" })], [], {}, quiet)
+  assert.equal(low.events.length, 0)
+  assert.equal(gone.events.length, 0)
+})
+
+test("arm state is dropped for devices that are gone", () => {
+  const armed = Model.diffEvents([], [device({ percentage: 5, nativePath: "/a" })], {}, options)
+  const after = Model.diffEvents([device({ percentage: 5, nativePath: "/a" })], [], armed.armState, options)
+  assert.equal(after.armState["/a"], undefined)
+})

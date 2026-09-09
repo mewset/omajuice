@@ -161,6 +161,88 @@ function summarize(devices) {
   }
 }
 
+// A level oscillating on the boundary would notify on every tick without a
+// margin, so the arm only resets once the device is meaningfully recovered.
+var HYSTERESIS = 5
+
+function defaultOptions() {
+  return {
+    threshold: 20,
+    notifyLowBattery: true,
+    notifyFullyCharged: true,
+    notifyDisconnect: false
+  }
+}
+
+function indexByKey(devices) {
+  var index = {}
+  var list = devices || []
+  for (var i = 0; i < list.length; i++) index[list[i].key] = list[i]
+  return index
+}
+
+function eventFor(kind, device) {
+  return {
+    kind: kind,
+    key: device.key,
+    model: device.model,
+    percentage: Number(device.percentage)
+  }
+}
+
+function diffEvents(previous, next, armState, options) {
+  var settings = options || defaultOptions()
+  var threshold = Number(settings.threshold)
+  var before = indexByKey(previous)
+  var after = next || []
+  var previousArm = armState || {}
+  var arm = {}
+  var events = []
+
+  for (var i = 0; i < after.length; i++) {
+    var current = after[i]
+    var earlier = before[current.key]
+    var wasArmed = previousArm[current.key] ? previousArm[current.key].lowNotified === true : false
+    var level = Number(current.percentage)
+    var state = Number(current.state)
+
+    if (current.isPresent !== true) {
+      if (earlier && earlier.isPresent === true && settings.notifyDisconnect === true) {
+        events.push(eventFor("disconnected", current))
+      }
+      continue
+    }
+
+    if (state !== DeviceState.Charging && level <= threshold) {
+      if (!wasArmed) {
+        wasArmed = true
+        if (settings.notifyLowBattery === true) events.push(eventFor("low", current))
+      }
+    } else if (level > threshold + HYSTERESIS) {
+      wasArmed = false
+    }
+
+    // Only a transition counts, so a shell restart with a device already full
+    // stays quiet.
+    if (settings.notifyFullyCharged === true && state === DeviceState.FullyCharged
+        && earlier && Number(earlier.state) !== DeviceState.FullyCharged) {
+      events.push(eventFor("charged", current))
+    }
+
+    arm[current.key] = { lowNotified: wasArmed }
+  }
+
+  if (settings.notifyDisconnect === true) {
+    var stillHere = indexByKey(after)
+    var was = previous || []
+    for (var j = 0; j < was.length; j++) {
+      if (!stillHere[was[j].key]) events.push(eventFor("disconnected", was[j]))
+    }
+  }
+
+  return { events: events, armState: arm }
+}
+
 if (typeof module !== "undefined") {
   module.exports = {
     DeviceType: DeviceType,
@@ -171,6 +253,9 @@ if (typeof module !== "undefined") {
     matchesKeyword: matchesKeyword,
     isAudioDevice: isAudioDevice,
     selectDevices: selectDevices,
-    summarize: summarize
+    summarize: summarize,
+    HYSTERESIS: HYSTERESIS,
+    defaultOptions: defaultOptions,
+    diffEvents: diffEvents
   }
 }
