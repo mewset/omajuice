@@ -79,6 +79,18 @@ BarWidget {
     else open()
   }
 
+  // Forwarded so this widget can stand in for the panel as the bar's popout
+  // identity: Bar.requestPopout prefers closeForPopoutSwitch over close, and
+  // KeyboardPanel reads popoutSwitchClosing back off its owner (see the
+  // clock plugin's BarWidget.qml for the same six lines and the same reason
+  // - without them, switching panels still works through Bar.qml's close()
+  // fallback, but loses the instant handoff and cross-fades instead).
+  readonly property bool popoutSwitchClosing: panelLoader.item ? panelLoader.item.popoutSwitchClosing === true : false
+
+  function closeForPopoutSwitch() {
+    if (panelLoader.item) panelLoader.item.closeForPopoutSwitch()
+  }
+
   // Hands the panel everything it needs to render and to anchor itself.
   // Called whenever any of those inputs change, not only once at load, so a
   // bar reconfiguration or a settings change reaches the already-loaded panel.
@@ -111,6 +123,8 @@ BarWidget {
   MouseArea {
     id: button
     anchors.fill: parent
+    hoverEnabled: true
+    cursorShape: Qt.PointingHandCursor
     implicitWidth: root.vertical ? root.barSize : row.implicitWidth + Style.space(8)
     // Horizontal: full bar thickness, like every other full-height widget
     // (e.g. the media plugin's BarWidget.qml), so this item's click target

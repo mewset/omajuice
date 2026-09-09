@@ -11,6 +11,11 @@ through Quickshell directly.
 
 Omarchy 4 or later, with plugin support.
 
+Known gap: under a third-party bar that replaces Omarchy's own, the shell's
+service lookup returns null and the widget renders as an invisible empty item.
+Nothing breaks and no error appears, but there is also nothing to see or
+click.
+
 ## Install
 
 ```bash
@@ -29,6 +34,13 @@ Add the widget to the bar from `Setup > Plugins`.
 | Notify when fully charged | On | |
 | Notify on disconnect | Off | Bluetooth devices drop out on every suspend |
 | Hide when no device is found | On | Removes the bar item when nothing matches |
+
+Changing a setting never itself counts as a device event, so it never
+triggers a notification. One consequence: raising the threshold, or turning
+on "Show every external device", can mark a device that is already below the
+new threshold as already notified, without ever notifying you about it. That
+device then stays quiet until its level rises back above the threshold by a
+few points and drops again.
 
 ## How devices are matched
 

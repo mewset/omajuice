@@ -220,7 +220,15 @@ function diffEvents(previous, next, armState, options) {
       continue
     }
 
-    if (state !== DeviceState.Charging && level <= threshold) {
+    // A level of zero is missing data, not an emergency: some devices
+    // report nothing useful until a media profile is active (see the
+    // spec's risk section), and summarize() already excludes a zero-level
+    // ABSENT device from the summary for the same reason. This extends
+    // that to the low-battery branch. level > 0 is deliberately excluded
+    // from arming too - a device stuck at zero must not become armed as a
+    // side effect, or it would stay silent forever once it starts
+    // reporting real numbers and actually drops below the threshold.
+    if (state !== DeviceState.Charging && level > 0 && level <= threshold) {
       if (!wasArmed) {
         wasArmed = true
         if (settings.notifyLowBattery === true) events.push(eventFor("low", current))

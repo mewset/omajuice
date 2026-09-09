@@ -230,6 +230,32 @@ test("a device crossing the threshold notifies once", () => {
   assert.equal(second.events.length, 0)
 })
 
+test("a device reporting zero percent does not fire a low battery event", () => {
+  // A present device with no usable level reads as 0%, which is below any
+  // sane threshold. Without the level > 0 guard in diffEvents, this fires
+  // an urgent "Battery low" the moment the device is first seen - exactly
+  // the bad first impression described in the spec's risk section for
+  // devices that report nothing useful until a media profile is active.
+  const after = [device({ percentage: 0, nativePath: "/a" })]
+  const result = Model.diffEvents([], after, {}, options)
+  assert.equal(result.events.length, 0)
+  // Zero must not arm the device either, or it would stay silent forever
+  // once the device starts reporting a real level and actually drops
+  // below the threshold.
+  assert.equal(result.armState["/a"].lowNotified, false)
+})
+
+test("a device that was stuck at zero still notifies once it reports a real low level", () => {
+  const zero = [device({ percentage: 0, nativePath: "/a" })]
+  const atZero = Model.diffEvents([], zero, {}, options)
+  assert.equal(atZero.events.length, 0)
+
+  const real = [device({ percentage: 0.1, nativePath: "/a" })]
+  const afterReal = Model.diffEvents(zero, real, atZero.armState, options)
+  assert.equal(afterReal.events.length, 1)
+  assert.equal(afterReal.events[0].kind, "low")
+})
+
 test("a charging device never reports low battery", () => {
   const after = [device({ percentage: 0.05, state: Model.DeviceState.Charging, nativePath: "/a" })]
   const result = Model.diffEvents([], after, {}, options)
