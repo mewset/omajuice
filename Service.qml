@@ -20,15 +20,46 @@ Item {
   property var _armState: ({})
   property int _notificationId: 0
 
+  // The shell hands settings to widgets, not services, so the very first
+  // device-driven refresh happens before any widget has ever called
+  // applySettings and would otherwise diff against threshold: 20,
+  // notifyLowBattery: true defaults instead of the user's real settings -
+  // and, worse, arm an already-low device against those defaults, so the
+  // user's own settings would never produce that device's first
+  // notification once they arrived. False until the first applySettings.
+  property bool _settingsSeen: false
+
   // Widgets receive settings from the shell, services do not, so each widget
-  // pushes the same object in. Re-running the selection keeps the exposed
-  // devices and summary in step with a changed setting (showAllDevices, in
-  // particular) without waiting for the next UPower signal, while still
-  // threading _previous and _armState through rather than resetting them -
-  // the diff state is carried forward, not restarted. This must stay silent:
-  // see reselect() below for why.
+  // pushes the same object in. With several monitors that means several
+  // calls with the same values, so this must stay idempotent and must not
+  // restart the diff state (_previous/_armState are always carried forward,
+  // never reset to empty).
+  //
+  // The first call is special: _previous is still empty (refresh() has only
+  // been updating the display, see below), so evaluating it now checks the
+  // current devices against the user's real settings for the first time - a
+  // device already low correctly fires once, under the user's own
+  // threshold, exactly as diffEvents' first-seen-low case specifies.
+  //
+  // Every later call flushes first: it runs the full notifying evaluation
+  // under the OLD settings, so a device change that landed inside the
+  // debounce window is delivered rather than swallowed by the re-baseline
+  // below, THEN adopts the new settings, THEN re-baselines silently via
+  // reselect() - a settings change is not a device event and must not
+  // announce one (turning showAllDevices off would otherwise read as a
+  // burst of disconnects, turning it on as a burst of low-battery events,
+  // for devices that never actually changed).
   function applySettings(incoming) {
     if (!incoming) return
+
+    if (!_settingsSeen) {
+      settings = incoming
+      _settingsSeen = true
+      notifyEvents(recompute())
+      return
+    }
+
+    notifyEvents(recompute())
     settings = incoming
     reselect()
   }
@@ -77,25 +108,38 @@ Item {
     return result.events
   }
 
-  // Called from an actual UPower device signal (added/removed/changed). A
-  // real battery event, so its notifications are queued and sent.
-  function refresh() {
-    var events = recompute()
+  // Selection only, no diff: what the bar/panel display before the user's
+  // real settings have ever arrived. Deliberately does not touch
+  // _previous/_armState - diffing here would evaluate against defaults and
+  // could arm an already-low device before the user's own threshold has had
+  // a chance to see it, which is exactly what leaves it silent forever
+  // (Model.diffEvents only announces the transition into "low", not the
+  // state of being low).
+  function updateDisplayOnly() {
+    var selected = Model.selectDevices(collect(), setting("showAllDevices", false) === true)
+    devices = selected
+    summary = Model.summarize(selected)
+  }
+
+  function notifyEvents(events) {
     for (var i = 0; i < events.length; i++) queue(events[i])
     sendNext()
   }
 
-  // Called when a widget pushes settings. Changing showAllDevices or
-  // notifyDisconnect changes which devices are *selected*, not anything any
-  // device actually did - turning showAllDevices off drops peripherals out
-  // of the selection and would otherwise read as a burst of "disconnected"
-  // events, and turning it on would read as a burst of "low" events for
-  // devices that were already below the threshold. So this path re-baselines
-  // devices/summary/_previous/_armState exactly like refresh() (the arm
-  // state Model.diffEvents returns still marks an already-low device as
-  // armed, so it won't fire spuriously on the next device-driven refresh
-  // either, and re-arms normally once its level recovers past the
-  // hysteresis margin) but discards the events instead of queuing them.
+  // Called from an actual UPower device signal (added/removed/changed).
+  // Before the first applySettings, only the display is kept current -
+  // diffing and notifying wait for the user's real settings so the first
+  // evaluation happens against them, not against defaults.
+  function refresh() {
+    if (!_settingsSeen) {
+      updateDisplayOnly()
+      return
+    }
+    notifyEvents(recompute())
+  }
+
+  // Re-baselines the selection against new settings without treating the
+  // change as a device event. See the comment on applySettings for why.
   function reselect() {
     recompute()
   }
