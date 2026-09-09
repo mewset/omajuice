@@ -61,7 +61,13 @@ function toDevice(source) {
     key: nativePath !== "" ? nativePath : name,
     model: name,
     type: Number(input.type || 0),
-    percentage: Math.round(Number(input.percentage || 0)),
+    // Quickshell's UPowerDevice.percentage is a fraction from 0 to 1, not a
+    // whole percentage, exactly like Omarchy's own battery plugin assumes
+    // (see /usr/share/omarchy/shell/plugins/services/battery/BatteryModel.js,
+    // `Math.round(Number(device.percentage || 0) * 100)`). Everything past
+    // this boundary works in whole percentages, so the multiplication by 100
+    // must stay here and must never be "simplified" away.
+    percentage: Math.round(Number(input.percentage || 0) * 100),
     state: Number(input.state || 0),
     isPresent: input.isPresent === true,
     isLaptopBattery: input.isLaptopBattery === true,
