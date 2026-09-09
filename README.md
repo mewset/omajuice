@@ -22,6 +22,15 @@ it red when it gets low, and tells you before it becomes your problem.
 
 Omarchy 4 or later.
 
+## Coming from HeadsetStatus?
+
+On Omarchy 4, omajuice is the one to use. It replaces
+[HeadsetStatus](https://github.com/mewset/headsetstatus) and is the preferred
+choice there: nothing to compile, nothing running in the background, and your
+devices are recognised the same way they always were.
+
+HeadsetStatus stays where it is for setups that have not moved to Omarchy 4.
+
 ## Install
 
 ```bash
