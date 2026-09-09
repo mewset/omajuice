@@ -1,20 +1,26 @@
 # omajuice
 
-Headset battery in the Omarchy bar. Level, charge state and connection type for
-every wireless or USB headset UPower knows about, a panel listing them all, and
-notifications for low battery, charge completion and disconnect.
+Your headset's battery, right there in the Omarchy bar.
 
-No helper process, no daemon, no compiled dependency. The plugin reads UPower
-through Quickshell directly.
+![omajuice in the bar](preview.png)
+
+Wireless headsets are good at hiding how much charge they have left, usually
+until the moment they die mid-call. omajuice puts the number in your bar, turns
+it red when it gets low, and tells you before it becomes your problem.
+
+- **The level, always visible.** The lowest battery among your matched devices,
+  in the bar, next to everything else you already watch.
+- **A panel with the details.** Every matched device with its charge, its state
+  and whether it came in over Bluetooth or USB. Lowest first, because that is
+  the one you care about.
+- **It tells you when it matters.** Low battery, fully charged, and optionally
+  when a device drops off.
+- **Nothing running in the background.** No daemon, no helper process, no
+  compiled dependency. It reads what your system already knows.
 
 ## Requirements
 
-Omarchy 4 or later, with plugin support.
-
-Known gap: under a third-party bar that replaces Omarchy's own, the shell's
-service lookup returns null and the widget renders as an invisible empty item.
-Nothing breaks and no error appears, but there is also nothing to see or
-click.
+Omarchy 4 or later.
 
 ## Install
 
@@ -22,45 +28,38 @@ click.
 omarchy plugin add https://github.com/mewset/omajuice.git --enable
 ```
 
-Add the widget to the bar from `Setup > Plugins`.
+Then add the widget to your bar from `Setup > Plugins`.
 
 ## Settings
 
-| Setting | Default | Effect |
+| Setting | Default | What it does |
 |---|---|---|
-| Show every external device | Off | Lists mice, keyboards and controllers too |
-| Low battery threshold | 20% | When the low battery notification fires |
+| Show every external device | Off | Also lists mice, keyboards and controllers |
+| Low battery threshold | 20% | When the low battery warning fires |
 | Notify on low battery | On | |
 | Notify when fully charged | On | |
-| Notify on disconnect | Off | Bluetooth devices drop out on every suspend |
-| Hide when no device is found | On | Removes the bar item when nothing matches |
+| Notify on disconnect | Off | Bluetooth devices drop off on every suspend, so this one is noisy |
+| Hide when no device is found | On | Removes the bar item when there is nothing to show |
 
-Changing a setting never itself counts as a device event, so it never
-triggers a notification. One consequence: raising the threshold, or turning
-on "Show every external device", can mark a device that is already below the
-new threshold as already notified, without ever notifying you about it. That
-device then stays quiet until its level rises back above the threshold by a
-few points and drops again.
+## Not seeing your headset?
 
-## How devices are matched
+Some devices do not tell the system what they are. Turn on **Show every
+external device** and it will list everything with a battery, headset or not.
 
-UPower reports a device type. Headset, headphones, speakers and other audio
-types match immediately. Bluetooth devices frequently report no useful type at
-all, so those fall back to a keyword list covering the common headset vendors
-and model prefixes. The laptop battery and the mains supply are always
-excluded, because the bar already reports those.
+If that finds it, open an issue with the device name so it can be recognised
+properly next time.
 
-Turn on `Show every external device` if your headset is not recognised, and
-open an issue with the device name so the keyword list can be extended.
+## Good to know
 
-## Development
+**Changing a setting will not set off a warning.** If you raise the threshold
+above a device that is already below it, or reveal a device that is already
+low, omajuice stays quiet — a setting you changed is not something that
+happened to your battery. That device gets its warning the next time it
+genuinely drops, after recovering first.
 
-```bash
-node --test tests/
-```
-
-`Model.js` holds all logic and imports nothing from QML, so the whole test
-suite runs without a shell.
+**If you use a replacement bar,** one that takes the place of Omarchy's own,
+the widget cannot reach its data and will show nothing at all. Nothing breaks,
+but there is nothing to see either.
 
 ## Licence
 
