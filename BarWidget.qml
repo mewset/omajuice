@@ -68,7 +68,16 @@ BarWidget {
   implicitHeight: button.implicitHeight
 
   onBarChanged: injectPanel()
-  onServiceChanged: injectPanel()
+  // `service` can flip from null to non-null after settings have already
+  // arrived (pluginBarApiFor reassigns `.shell` on a cached api, and
+  // createScopedPluginShell returns null before the manifest registers), so
+  // onSettingsChanged alone can miss the window. Service.qml does not diff
+  // or notify until its first applySettings, so a missed window means the
+  // plugin stays silent for the rest of the session unless caught here too.
+  onServiceChanged: {
+    if (service) service.applySettings(settings)
+    injectPanel()
+  }
 
   MouseArea {
     id: button
@@ -85,7 +94,7 @@ BarWidget {
       Text {
         anchors.verticalCenter: parent.verticalCenter
         text: root.summary.charging ? "⚡" : "\u{1f3a7}"
-        color: root.bar ? root.bar.foreground : Color.foreground
+        color: root.bar ? root.bar.barForeground : Color.foreground
         font.family: root.bar ? root.bar.fontFamily : Style.fontFamily
         font.pixelSize: Style.bar.iconFont
       }
@@ -98,7 +107,7 @@ BarWidget {
           : root.summary.lowest + "%"
         color: root.summary.lowest >= 0 && root.summary.lowest <= root.lowBatteryThreshold
           ? (root.bar ? root.bar.urgent : Color.urgent)
-          : (root.bar ? root.bar.foreground : Color.foreground)
+          : (root.bar ? root.bar.barForeground : Color.foreground)
         font.family: root.bar ? root.bar.fontFamily : Style.fontFamily
         font.pixelSize: Style.font.body
       }
