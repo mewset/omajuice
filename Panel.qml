@@ -1,15 +1,18 @@
 import QtQuick
 import QtQuick.Layouts
-import Quickshell
 import qs.Ui
 import qs.Commons
 import "Model.js" as Model
 
 // Device list opened from the bar widget: one row per selected device,
 // ordered by level ascending (lowest first) since that is the device
-// needing attention. An informational popup, not an interactive one - no
-// connect/forget actions - so it anchors through PopupCard rather than
-// KeyboardPanel, matching the media plugin's own popup.
+// needing attention, plus a "show every external device" toggle. That
+// toggle is real interactive content - not decoration - so this anchors
+// through KeyboardPanel rather than PopupCard: every first-party plugin
+// with a Panel.qml of this shape (bluetooth, power, tailscale, dropbox,
+// audio, network, monitor, weather, clock, agents) uses KeyboardPanel once
+// there is a control to click, and PopupCard stays reserved for the simpler
+// popups a BarWidget builds inline for itself (Tray, the media plugin).
 Panel {
   id: root
   moduleName: "io.github.mewset.omajuice"
@@ -23,6 +26,7 @@ Panel {
 
   readonly property var barIdentity: hostWidget || root
   readonly property var devices: service ? service.devices : []
+  readonly property bool showAllDevices: setting("showAllDevices", false) === true
   readonly property int lowBatteryThreshold: Number(setting("lowBatteryThreshold", 20))
   readonly property color foreground: bar ? bar.foreground : Color.foreground
   readonly property color urgent: bar ? bar.urgent : Color.urgent
@@ -36,7 +40,21 @@ Panel {
     return device.connection
   }
 
-  PopupCard {
+  // Flips showAllDevices and writes the whole settings object back, not
+  // just this one key: updateEntryInline (shell.qml) replaces the widget's
+  // layout entry wholesale rather than merging, so sending only the changed
+  // key would silently drop every other setting the user has on this
+  // widget (e.g. hideWhenEmpty). Starting from root.settings - the object
+  // this panel was actually handed - also means a setting still sitting at
+  // its manifest default, and therefore absent from the layout entry, is
+  // not resurrected as an explicit value here. Matches the pattern the
+  // power plugin's togglePercentage uses for the same reason.
+  function toggleShowAllDevices() {
+    root.settings = Object.assign({}, root.settings, { showAllDevices: !root.showAllDevices })
+    if (root.bar && root.bar.shell) root.bar.shell.updateEntryInline(root.moduleName, root.settings)
+  }
+
+  KeyboardPanel {
     id: popup
     anchorItem: root.anchorItem
     bar: root.bar
@@ -50,6 +68,37 @@ Panel {
       anchors.fill: parent
       spacing: Style.space(6)
 
+      // Always present, not only in the empty state - a toggle that only
+      // shows up when the list is empty would vanish the moment switching
+      // it on brings devices into view, leaving no way to switch it back
+      // off. This is a setting, not a list row, so it sits above the
+      // separator rather than among the device rows below.
+      RowLayout {
+        id: settingsRow
+        Layout.fillWidth: true
+        spacing: Style.space(10)
+
+        Text {
+          Layout.fillWidth: true
+          wrapMode: Text.WordWrap
+          color: root.foreground
+          font.family: root.fontFamily
+          font.pixelSize: Style.font.body
+          text: "Show every external device"
+        }
+
+        ToggleSwitch {
+          checked: root.showAllDevices
+          foreground: root.foreground
+          onToggled: root.toggleShowAllDevices()
+        }
+      }
+
+      PanelSeparator {
+        Layout.fillWidth: true
+        foreground: root.foreground
+      }
+
       Text {
         visible: root.devices.length === 0
         Layout.fillWidth: true
@@ -57,7 +106,7 @@ Panel {
         color: root.dim
         font.family: root.fontFamily
         font.pixelSize: Style.font.body
-        text: "No headset found. Turn on “Show every external device” in the widget settings to list everything UPower reports."
+        text: root.showAllDevices ? "No external device found." : "No headset found."
       }
 
       Repeater {
