@@ -264,8 +264,21 @@ Item {
   // that work, so it is dropped.
   function refreshSoundcore() {
     if (_currentJob !== null || _jobs.length > 0) return
+    if (!_hasBluetoothDevice()) {
+      if (Object.keys(soundcore).length > 0) soundcore = ({})
+      return
+    }
     _enqueueJobs([{ kind: "paired", mac: "", mode: "" }])
     _startNextJob()
+  }
+
+  function _hasBluetoothDevice() {
+    for (var i = 0; i < devices.length; i++) {
+      var device = devices[i]
+      if (device.connection === "Bluetooth" && device.isPresent === true
+          && Model.macFromNativePath(device.nativePath) !== "") return true
+    }
+    return false
   }
 
   // Only a settled "loaded" entry can switch: the click is ignored while
@@ -308,19 +321,30 @@ Item {
 
       var command = _commandFor(job)
       if (command === null) {
-        _finishJob(job, -1, "")
+        // Cached ids with no readable setting among them: the device is not
+        // one we can show anything for, so it falls back to codec only.
+        if (job.kind === "read" && _settingIds.hasOwnProperty(job.mac)) _dropSoundcore(job.mac)
+        else _finishJob(job, -1, "")
         continue
       }
 
       _currentJob = job
       soundcoreProcess.command = command
       soundcoreProcess.running = true
+      soundcoreTimeout.restart()
     }
+  }
+
+  function _dropSoundcore(mac) {
+    var next = {}
+    for (var key in soundcore) if (key !== mac) next[key] = soundcore[key]
+    soundcore = next
   }
 
   function _jobEnded(exitCode, text) {
     var job = _currentJob
     if (job === null) return
+    soundcoreTimeout.stop()
     _currentJob = null
     _finishJob(job, exitCode, text)
     _startNextJob()
@@ -373,6 +397,11 @@ Item {
 
     if (job.kind === "read") {
       var values = ok ? Model.parseSettingValues(text) : null
+      if (values === null && _settingIds.hasOwnProperty(job.mac)) {
+        var kept = {}
+        for (var id in _settingIds) if (id !== job.mac) kept[id] = _settingIds[id]
+        _settingIds = kept
+      }
       _setSoundcore(job.mac, values !== null
           ? { status: "loaded", values: values }
           : { status: "unavailable", values: entry.values })
@@ -389,6 +418,18 @@ Item {
         return
       }
       _setSoundcore(job.mac, { status: "unavailable", values: entry.values })
+    }
+  }
+
+  // Watchdog only: it ends an openscq30 call that never exits so the queue
+  // cannot stay locked. It never starts openscq30 - that runs only on panel
+  // open and on a mode click, and no Timer may start it.
+  Timer {
+    id: soundcoreTimeout
+    interval: 10000
+    repeat: false
+    onTriggered: {
+      if (soundcoreProcess.running) soundcoreProcess.signal(15)
     }
   }
 
