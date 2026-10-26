@@ -391,3 +391,38 @@ test("an unusable id is left out entirely", () => {
     assert.equal(command.indexOf("-r"), -1)
   }
 })
+
+test("macFromNativePath extracts and normalises a BlueZ MAC", () => {
+  assert.equal(Model.macFromNativePath("/org/bluez/hci0/dev_88_0E_85_2F_FB_03"), "880e852ffb03")
+  assert.equal(Model.macFromNativePath("/sys/devices/pci0000:00/usb1/1-2"), "")
+  assert.equal(Model.macFromNativePath(""), "")
+  assert.equal(Model.macFromNativePath(null), "")
+  assert.equal(Model.macFromNativePath("/org/bluez/hci0/dev_88_0E_85"), "")
+})
+
+test("normalizeMac and colonMac round-trip", () => {
+  assert.equal(Model.normalizeMac("88:0E:85:2F:FB:03"), "880e852ffb03")
+  assert.equal(Model.colonMac("880e852ffb03"), "88:0E:85:2F:FB:03")
+  assert.equal(Model.colonMac("88:0E; rm -rf ~"), "")
+  assert.equal(Model.normalizeMac("not a mac"), "")
+})
+
+test("sinkNameMatchesMac only matches the output node of that device", () => {
+  const mac = "880e852ffb03"
+  assert.equal(Model.sinkNameMatchesMac("bluez_output.88_0E_85_2F_FB_03.1", mac), true)
+  assert.equal(Model.sinkNameMatchesMac("bluez_input.88:0E:85:2F:FB:03", mac), false)
+  assert.equal(Model.sinkNameMatchesMac("bluez_output.11_22_33_44_55_66.1", mac), false)
+  assert.equal(Model.sinkNameMatchesMac("bluez_output.88_0E_85_2F_FB_03.1", ""), false)
+})
+
+test("codecLabel maps known codecs and uppercases unknown ones", () => {
+  assert.equal(Model.codecLabel("aac"), "AAC")
+  assert.equal(Model.codecLabel("sbc"), "SBC")
+  assert.equal(Model.codecLabel("sbc_xq"), "SBC-XQ")
+  assert.equal(Model.codecLabel("msbc"), "mSBC")
+  assert.equal(Model.codecLabel("aptx_hd"), "aptX HD")
+  assert.equal(Model.codecLabel("ldac"), "LDAC")
+  assert.equal(Model.codecLabel("opus_g"), "OPUS_G")
+  assert.equal(Model.codecLabel(""), "")
+  assert.equal(Model.codecLabel(undefined), "")
+})

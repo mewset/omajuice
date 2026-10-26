@@ -258,6 +258,66 @@ function diffEvents(previous, next, armState, options) {
   return { events: events, armState: arm }
 }
 
+// A Bluetooth device is identified by its MAC across BlueZ, PipeWire and
+// openscq30, each of which spells it differently. Everything is reduced to
+// 12 lowercase hex characters and only turned back into colons for display
+// and for the openscq30 command line.
+function normalizeMac(text) {
+  if (typeof text !== "string") return ""
+  var hex = text.replace(/[^0-9a-fA-F]/g, "").toLowerCase()
+  return hex.length === 12 ? hex : ""
+}
+
+// Only the part after "dev_" is the MAC: "bluez" and "hci" contain hex
+// letters of their own.
+function macFromNativePath(nativePath) {
+  if (typeof nativePath !== "string") return ""
+  var match = /\/org\/bluez\/[^\/]+\/dev_([^\/]*)$/.exec(nativePath)
+  return match ? normalizeMac(match[1]) : ""
+}
+
+function colonMac(mac) {
+  var hex = normalizeMac(mac)
+  if (hex === "") return ""
+  return hex.match(/.{2}/g).join(":").toUpperCase()
+}
+
+var SINK_PREFIX = "bluez_output."
+
+function sinkNameMatchesMac(nodeName, mac) {
+  var wanted = normalizeMac(mac)
+  if (wanted === "" || typeof nodeName !== "string") return false
+  if (nodeName.indexOf(SINK_PREFIX) !== 0) return false
+  var hex = nodeName.slice(SINK_PREFIX.length).replace(/[^0-9a-fA-F]/g, "").toLowerCase()
+  return hex.indexOf(wanted) !== -1
+}
+
+// PipeWire's api.bluez5.codec values.
+var CODEC_LABELS = {
+  sbc: "SBC",
+  sbc_xq: "SBC-XQ",
+  aac: "AAC",
+  aac_eld: "AAC-ELD",
+  aptx: "aptX",
+  aptx_hd: "aptX HD",
+  aptx_ll: "aptX LL",
+  aptx_ll_duplex: "aptX LL",
+  ldac: "LDAC",
+  lc3: "LC3",
+  lc3plus_h3: "LC3plus",
+  faststream: "FastStream",
+  faststream_duplex: "FastStream",
+  opus_05: "Opus",
+  msbc: "mSBC",
+  cvsd: "CVSD"
+}
+
+function codecLabel(raw) {
+  if (typeof raw !== "string" || raw === "") return ""
+  var key = raw.toLowerCase()
+  return CODEC_LABELS.hasOwnProperty(key) ? CODEC_LABELS[key] : raw.toUpperCase()
+}
+
 var APP_NAME = "omajuice"
 
 function notificationText(event) {
@@ -328,6 +388,12 @@ if (typeof module !== "undefined") {
     APP_NAME: APP_NAME,
     notificationText: notificationText,
     notificationIcon: notificationIcon,
-    notificationCommand: notificationCommand
+    notificationCommand: notificationCommand,
+    normalizeMac: normalizeMac,
+    macFromNativePath: macFromNativePath,
+    colonMac: colonMac,
+    sinkNameMatchesMac: sinkNameMatchesMac,
+    CODEC_LABELS: CODEC_LABELS,
+    codecLabel: codecLabel
   }
 }
