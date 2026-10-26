@@ -416,6 +416,51 @@ function levelFromFifths(text) {
   return match ? Number(match[1]) * 20 : -1
 }
 
+var MODE_LABELS = {
+  NoiseCanceling: "Noise cancelling",
+  Transparency: "Transparency",
+  Normal: "Normal"
+}
+
+var UNAVAILABLE_LABEL = "Mode unavailable"
+
+function batteryParts(values) {
+  var parts = []
+  var apart = values.twsStatus === "Disconnected"
+      && (values.hostDevice === "Left" || values.hostDevice === "Right")
+
+  var left = levelFromFifths(values.batteryLevelLeft)
+  var right = levelFromFifths(values.batteryLevelRight)
+  var caseLevel = levelFromFifths(values.caseBatteryLevel)
+
+  if (left >= 0 && !(apart && values.hostDevice !== "Left")) parts.push("L " + left + "%")
+  if (right >= 0 && !(apart && values.hostDevice !== "Right")) parts.push("R " + right + "%")
+  if (caseLevel >= 0 && !apart) parts.push("Case " + caseLevel + "%")
+
+  return parts.join(" · ")
+}
+
+// soundcore is null for a device openscq30 does not manage, otherwise
+// { status: "loading" | "loaded" | "switching" | "unavailable", values }.
+function detailsFor(rawCodec, soundcore) {
+  var details = { codec: codecLabel(rawCodec), mode: "", modeClickable: false, batteries: "" }
+  if (!soundcore) return details
+
+  if (soundcore.status === "unavailable") {
+    details.mode = UNAVAILABLE_LABEL
+    return details
+  }
+
+  var values = soundcore.values
+  if (!values) return details
+
+  var label = MODE_LABELS.hasOwnProperty(values.ambientSoundMode) ? MODE_LABELS[values.ambientSoundMode] : ""
+  details.mode = label
+  details.modeClickable = soundcore.status === "loaded" && label !== ""
+  details.batteries = batteryParts(values)
+  return details
+}
+
 var APP_NAME = "omajuice"
 
 function notificationText(event) {
@@ -503,6 +548,9 @@ if (typeof module !== "undefined") {
     AMBIENT_MODES: AMBIENT_MODES,
     nextAmbientMode: nextAmbientMode,
     setModeCommand: setModeCommand,
-    levelFromFifths: levelFromFifths
+    levelFromFifths: levelFromFifths,
+    MODE_LABELS: MODE_LABELS,
+    UNAVAILABLE_LABEL: UNAVAILABLE_LABEL,
+    detailsFor: detailsFor
   }
 }

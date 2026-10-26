@@ -487,3 +487,46 @@ test("setModeCommand only accepts known modes and valid MACs", () => {
   assert.equal(Model.setModeCommand("880e852ffb03", "Normal --set eq=x"), null)
   assert.equal(Model.setModeCommand("", "Normal"), null)
 })
+
+const fullValues = {
+  ambientSoundMode: "NoiseCanceling", batteryLevelLeft: "5/5", batteryLevelRight: "5/5",
+  caseBatteryLevel: "4/5", twsStatus: "Connected", hostDevice: "Right"
+}
+
+test("detailsFor shows codec only for unsupported devices", () => {
+  assert.deepEqual(Model.detailsFor("aac", null), { codec: "AAC", mode: "", modeClickable: false, batteries: "" })
+  assert.deepEqual(Model.detailsFor("", null), { codec: "", mode: "", modeClickable: false, batteries: "" })
+})
+
+test("detailsFor shows the full Soundcore state when loaded", () => {
+  assert.deepEqual(Model.detailsFor("aac", { status: "loaded", values: fullValues }),
+    { codec: "AAC", mode: "Noise cancelling", modeClickable: true, batteries: "L 100% · R 100% · Case 80%" })
+})
+
+test("detailsFor keeps last values but blocks clicks while busy", () => {
+  const busy = Model.detailsFor("aac", { status: "switching", values: fullValues })
+  assert.equal(busy.mode, "Noise cancelling")
+  assert.equal(busy.modeClickable, false)
+  assert.deepEqual(Model.detailsFor("aac", { status: "loading", values: null }),
+    { codec: "AAC", mode: "", modeClickable: false, batteries: "" })
+})
+
+test("detailsFor reports an unavailable channel without batteries", () => {
+  assert.deepEqual(Model.detailsFor("aac", { status: "unavailable", values: fullValues }),
+    { codec: "AAC", mode: "Mode unavailable", modeClickable: false, batteries: "" })
+})
+
+test("detailsFor shows only the worn bud when the buds are apart", () => {
+  const apart = Object.assign({}, fullValues, { twsStatus: "Disconnected", hostDevice: "Right", ambientSoundMode: "Normal" })
+  const details = Model.detailsFor("aac", { status: "loaded", values: apart })
+  assert.equal(details.batteries, "R 100%")
+  assert.equal(details.mode, "Normal")
+})
+
+test("detailsFor skips parts a model does not report", () => {
+  const partial = { ambientSoundMode: "Transparency", batteryLevelLeft: "3/5", batteryLevelRight: "2/5" }
+  assert.equal(Model.detailsFor("sbc", { status: "loaded", values: partial }).batteries, "L 60% · R 40%")
+  const noMode = Model.detailsFor("sbc", { status: "loaded", values: { batteryLevelLeft: "3/5" } })
+  assert.equal(noMode.mode, "")
+  assert.equal(noMode.modeClickable, false)
+})
