@@ -318,6 +318,104 @@ function codecLabel(raw) {
   return CODEC_LABELS.hasOwnProperty(key) ? CODEC_LABELS[key] : raw.toUpperCase()
 }
 
+// openscq30 talks to Soundcore headsets over their own channel. The command
+// below is the only shell string in the plugin; it interpolates nothing and
+// exits 127 when the tool is not installed.
+var OPENSCQ30_PAIRED_COMMAND = [
+  "sh", "-c",
+  "command -v openscq30 >/dev/null 2>&1 && exec openscq30 paired-devices list --json"
+]
+
+function parseJson(text) {
+  try {
+    return JSON.parse(text)
+  } catch (error) {
+    return undefined
+  }
+}
+
+function isPlainObject(value) {
+  return value !== null && typeof value === "object" && !Array.isArray(value)
+}
+
+function parsePairedDevices(text) {
+  var list = parseJson(text)
+  if (!Array.isArray(list)) return []
+  var macs = []
+  for (var i = 0; i < list.length; i++) {
+    var entry = list[i]
+    if (!isPlainObject(entry) || entry.isDemo === true) continue
+    var mac = normalizeMac(entry.macAddress)
+    if (mac !== "") macs.push(mac)
+  }
+  return macs
+}
+
+function deviceCommand(mac, rest) {
+  var colons = colonMac(mac)
+  if (colons === "") return null
+  return ["openscq30", "device", "-a", colons].concat(rest)
+}
+
+function settingIdsCommand(mac) {
+  return deviceCommand(mac, ["list-settings", "--no-categories", "--json"])
+}
+
+function parseSettingIds(text) {
+  var settings = parseJson(text)
+  return isPlainObject(settings) ? Object.keys(settings) : null
+}
+
+var SOUNDCORE_READ_IDS = [
+  "ambientSoundMode", "batteryLevelLeft", "batteryLevelRight",
+  "caseBatteryLevel", "twsStatus", "hostDevice"
+]
+
+function readCommand(mac, availableIds) {
+  var rest = ["setting"]
+  var wanted = 0
+  for (var i = 0; i < SOUNDCORE_READ_IDS.length; i++) {
+    if ((availableIds || []).indexOf(SOUNDCORE_READ_IDS[i]) === -1) continue
+    rest.push("--get", SOUNDCORE_READ_IDS[i])
+    wanted++
+  }
+  if (wanted === 0) return null
+  rest.push("--json")
+  return deviceCommand(mac, rest)
+}
+
+function parseSettingValues(text) {
+  var list = parseJson(text)
+  if (!Array.isArray(list) || list.length === 0) return null
+  var values = {}
+  for (var i = 0; i < list.length; i++) {
+    var entry = list[i]
+    if (!isPlainObject(entry) || typeof entry.settingId !== "string" || !isPlainObject(entry.value)) continue
+    values[entry.settingId] = entry.value.value
+  }
+  return values
+}
+
+var AMBIENT_MODES = ["NoiseCanceling", "Transparency", "Normal"]
+
+function nextAmbientMode(current) {
+  var index = AMBIENT_MODES.indexOf(current)
+  return index === -1 ? AMBIENT_MODES[0] : AMBIENT_MODES[(index + 1) % AMBIENT_MODES.length]
+}
+
+function setModeCommand(mac, mode) {
+  if (AMBIENT_MODES.indexOf(mode) === -1) return null
+  return deviceCommand(mac, [
+    "setting", "--set", "ambientSoundMode=" + mode, "--get", "ambientSoundMode", "--json"
+  ])
+}
+
+// Battery levels come as "n/5".
+function levelFromFifths(text) {
+  var match = /^([0-5])\/5$/.exec(typeof text === "string" ? text : "")
+  return match ? Number(match[1]) * 20 : -1
+}
+
 var APP_NAME = "omajuice"
 
 function notificationText(event) {
@@ -394,6 +492,17 @@ if (typeof module !== "undefined") {
     colonMac: colonMac,
     sinkNameMatchesMac: sinkNameMatchesMac,
     CODEC_LABELS: CODEC_LABELS,
-    codecLabel: codecLabel
+    codecLabel: codecLabel,
+    OPENSCQ30_PAIRED_COMMAND: OPENSCQ30_PAIRED_COMMAND,
+    parsePairedDevices: parsePairedDevices,
+    settingIdsCommand: settingIdsCommand,
+    parseSettingIds: parseSettingIds,
+    SOUNDCORE_READ_IDS: SOUNDCORE_READ_IDS,
+    readCommand: readCommand,
+    parseSettingValues: parseSettingValues,
+    AMBIENT_MODES: AMBIENT_MODES,
+    nextAmbientMode: nextAmbientMode,
+    setModeCommand: setModeCommand,
+    levelFromFifths: levelFromFifths
   }
 }

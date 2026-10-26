@@ -426,3 +426,64 @@ test("codecLabel maps known codecs and uppercases unknown ones", () => {
   assert.equal(Model.codecLabel(""), "")
   assert.equal(Model.codecLabel(undefined), "")
 })
+
+test("parsePairedDevices keeps real devices only", () => {
+  const text = JSON.stringify([
+    { macAddress: "88:0E:85:2F:FB:03", model: "SoundcoreA3955", isDemo: false },
+    { macAddress: "00:11:22:33:44:55", model: "SoundcoreA3955", isDemo: true }
+  ])
+  assert.deepEqual(Model.parsePairedDevices(text), ["880e852ffb03"])
+  assert.deepEqual(Model.parsePairedDevices(""), [])
+  assert.deepEqual(Model.parsePairedDevices("Error: boom"), [])
+  assert.deepEqual(Model.parsePairedDevices("{}"), [])
+})
+
+test("parseSettingIds returns the keys or null", () => {
+  assert.deepEqual(Model.parseSettingIds('{"ambientSoundMode":{"type":"select"},"twsStatus":{"type":"information"}}'),
+    ["ambientSoundMode", "twsStatus"])
+  assert.equal(Model.parseSettingIds(""), null)
+  assert.equal(Model.parseSettingIds("[]"), null)
+})
+
+test("readCommand requests only ids the model has, in a fixed order", () => {
+  assert.deepEqual(Model.readCommand("880e852ffb03", ["twsStatus", "ambientSoundMode", "firmwareVersion"]),
+    ["openscq30", "device", "-a", "88:0E:85:2F:FB:03", "setting",
+     "--get", "ambientSoundMode", "--get", "twsStatus", "--json"])
+  assert.equal(Model.readCommand("880e852ffb03", ["firmwareVersion"]), null)
+  assert.equal(Model.readCommand("garbage", Model.SOUNDCORE_READ_IDS), null)
+})
+
+test("parseSettingValues flattens values and rejects empty output", () => {
+  const text = JSON.stringify([
+    { settingId: "ambientSoundMode", value: { type: "string", value: "NoiseCanceling" } },
+    { settingId: "batteryLevelLeft", value: { type: "string", value: "5/5" } }
+  ])
+  assert.deepEqual(Model.parseSettingValues(text), { ambientSoundMode: "NoiseCanceling", batteryLevelLeft: "5/5" })
+  assert.equal(Model.parseSettingValues(""), null)
+  assert.equal(Model.parseSettingValues("[]"), null)
+  assert.equal(Model.parseSettingValues("not json"), null)
+})
+
+test("levelFromFifths converts the 0-5 scale", () => {
+  assert.equal(Model.levelFromFifths("5/5"), 100)
+  assert.equal(Model.levelFromFifths("4/5"), 80)
+  assert.equal(Model.levelFromFifths("0/5"), 0)
+  assert.equal(Model.levelFromFifths("7/5"), -1)
+  assert.equal(Model.levelFromFifths(""), -1)
+  assert.equal(Model.levelFromFifths(undefined), -1)
+})
+
+test("nextAmbientMode cycles and recovers from unknown values", () => {
+  assert.equal(Model.nextAmbientMode("NoiseCanceling"), "Transparency")
+  assert.equal(Model.nextAmbientMode("Transparency"), "Normal")
+  assert.equal(Model.nextAmbientMode("Normal"), "NoiseCanceling")
+  assert.equal(Model.nextAmbientMode("Something"), "NoiseCanceling")
+})
+
+test("setModeCommand only accepts known modes and valid MACs", () => {
+  assert.deepEqual(Model.setModeCommand("880e852ffb03", "Transparency"),
+    ["openscq30", "device", "-a", "88:0E:85:2F:FB:03", "setting",
+     "--set", "ambientSoundMode=Transparency", "--get", "ambientSoundMode", "--json"])
+  assert.equal(Model.setModeCommand("880e852ffb03", "Normal --set eq=x"), null)
+  assert.equal(Model.setModeCommand("", "Normal"), null)
+})
