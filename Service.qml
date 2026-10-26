@@ -1,6 +1,7 @@
 import QtQuick
 import Quickshell
 import Quickshell.Io
+import Quickshell.Services.Pipewire
 import Quickshell.Services.UPower
 import "Model.js" as Model
 
@@ -209,6 +210,209 @@ Item {
       var id = parseInt(String(notificationStdout.text || "").trim(), 10)
       if (exitCode === 0 && isFinite(id) && id > 0) root._notificationId = id
       root.sendNext()
+    }
+  }
+
+  readonly property var pipewireNodes: Pipewire.nodes ? Pipewire.nodes.values : []
+
+  readonly property var bluetoothSinks: {
+    var list = []
+    for (var i = 0; i < pipewireNodes.length; i++) {
+      var n = pipewireNodes[i]
+      if (n && n.isSink && !n.isStream && String(n.name || "").indexOf("bluez_output.") === 0) list.push(n)
+    }
+    return list
+  }
+
+  // PwNode.properties is invalid until the node is bound, and reading it
+  // unbound can destabilize Quickshell's Pipewire service (see the audio
+  // panel). Sinks are matched by name, which needs no binding, and only the
+  // properties of nodes this tracker binds are ever read.
+  PwObjectTracker { objects: root.bluetoothSinks }
+
+  function codecFor(device) {
+    var mac = Model.macFromNativePath(device ? device.nativePath : "")
+    if (mac === "") return ""
+    var sinks = root.bluetoothSinks
+    for (var i = 0; i < sinks.length; i++) {
+      var node = sinks[i]
+      if (!Model.sinkNameMatchesMac(node.name, mac)) continue
+      if (!node.ready || !node.properties) return ""
+      var codec = node.properties["api.bluez5.codec"]
+      return typeof codec === "string" ? codec : ""
+    }
+    return ""
+  }
+
+  // Normalised MAC -> { status, values }. Replaced wholesale on every change,
+  // like _queue, so the panel's bindings see each one.
+  property var soundcore: ({})
+
+  // A device's setting ids do not change while it stays the same device, so
+  // they are fetched once per shell session and only cached on success - a
+  // failure (typically the phone app holding the channel) is retried on the
+  // next panel open.
+  property var _settingIds: ({})
+
+  // openscq30 holds an exclusive channel to the headset, so jobs run one at a
+  // time. _currentJob is the one whose process is running, null when idle.
+  property var _jobs: []
+  property var _currentJob: null
+
+  // Called on panel open, never from a Timer: openscq30 is not a poller. A
+  // reopen while anything is still queued or running would only duplicate
+  // that work, so it is dropped.
+  function refreshSoundcore() {
+    if (_currentJob !== null || _jobs.length > 0) return
+    _enqueueJobs([{ kind: "paired", mac: "", mode: "" }])
+    _startNextJob()
+  }
+
+  // Only a settled "loaded" entry can switch: the click is ignored while
+  // loading, switching or unavailable, so repeated clicks queue nothing.
+  function cycleMode(mac) {
+    var entry = soundcore[mac]
+    if (!entry || entry.status !== "loaded") return
+    _setSoundcore(mac, { status: "switching", values: entry.values })
+    _enqueueJobs([{ kind: "set", mac: mac, mode: Model.nextAmbientMode(entry.values ? entry.values.ambientSoundMode : "") }])
+    _startNextJob()
+  }
+
+  function _enqueueJobs(jobs) {
+    _jobs = _jobs.concat(jobs)
+  }
+
+  function _setSoundcore(mac, entry) {
+    var next = {}
+    for (var key in soundcore) next[key] = soundcore[key]
+    next[mac] = entry
+    soundcore = next
+  }
+
+  function _commandFor(job) {
+    if (job.kind === "paired") return Model.OPENSCQ30_PAIRED_COMMAND
+    if (job.kind === "ids") return Model.settingIdsCommand(job.mac)
+    if (job.kind === "read") return Model.readCommand(job.mac, _settingIds[job.mac])
+    if (job.kind === "set") return Model.setModeCommand(job.mac, job.mode)
+    return null
+  }
+
+  // A job without a command (invalid MAC, no readable setting ids) is
+  // completed as a failure on the spot, so it settles its device and the
+  // queue keeps moving without a process ever starting.
+  function _startNextJob() {
+    while (_currentJob === null && _jobs.length > 0) {
+      var pending = _jobs.slice(0)
+      var job = pending.shift()
+      _jobs = pending
+
+      var command = _commandFor(job)
+      if (command === null) {
+        _finishJob(job, -1, "")
+        continue
+      }
+
+      _currentJob = job
+      soundcoreProcess.command = command
+      soundcoreProcess.running = true
+    }
+  }
+
+  function _jobEnded(exitCode, text) {
+    var job = _currentJob
+    if (job === null) return
+    _currentJob = null
+    _finishJob(job, exitCode, text)
+    _startNextJob()
+  }
+
+  // stderr is never read: a non-zero exit or stdout that does not parse is
+  // all "unavailable" means, whatever openscq30 had to say about it.
+  function _finishJob(job, exitCode, text) {
+    var ok = exitCode === 0
+
+    if (job.kind === "paired") {
+      var paired = ok ? Model.parsePairedDevices(text) : []
+      var next = {}
+      var follow = []
+      for (var i = 0; i < devices.length; i++) {
+        var device = devices[i]
+        if (device.connection !== "Bluetooth" || device.isPresent !== true) continue
+        var mac = Model.macFromNativePath(device.nativePath)
+        if (mac === "" || paired.indexOf(mac) === -1 || next[mac] !== undefined) continue
+        var previous = soundcore[mac]
+        next[mac] = { status: "loading", values: previous ? previous.values : null }
+        if (!_settingIds.hasOwnProperty(mac)) follow.push({ kind: "ids", mac: mac, mode: "" })
+        follow.push({ kind: "read", mac: mac, mode: "" })
+      }
+      soundcore = next
+      _enqueueJobs(follow)
+      return
+    }
+
+    // A device dropped by a later paired result (a set queued before it) has
+    // nothing left to settle and must not be brought back.
+    var entry = soundcore[job.mac]
+    if (!entry) return
+
+    if (job.kind === "ids") {
+      var ids = ok ? Model.parseSettingIds(text) : null
+      if (ids !== null) {
+        var cached = {}
+        for (var key in _settingIds) cached[key] = _settingIds[key]
+        cached[job.mac] = ids
+        _settingIds = cached
+        return
+      }
+      _setSoundcore(job.mac, { status: "unavailable", values: entry.values })
+      _jobs = _jobs.filter(function (queued) {
+        return !(queued.kind === "read" && queued.mac === job.mac)
+      })
+      return
+    }
+
+    if (job.kind === "read") {
+      var values = ok ? Model.parseSettingValues(text) : null
+      _setSoundcore(job.mac, values !== null
+          ? { status: "loaded", values: values }
+          : { status: "unavailable", values: entry.values })
+      return
+    }
+
+    if (job.kind === "set") {
+      var result = ok ? Model.parseSettingValues(text) : null
+      if (result !== null && typeof result.ambientSoundMode === "string") {
+        var merged = {}
+        for (var field in entry.values) merged[field] = entry.values[field]
+        merged.ambientSoundMode = result.ambientSoundMode
+        _setSoundcore(job.mac, { status: "loaded", values: merged })
+        return
+      }
+      _setSoundcore(job.mac, { status: "unavailable", values: entry.values })
+    }
+  }
+
+  Process {
+    id: soundcoreProcess
+    running: false
+    command: []
+    stdout: StdioCollector {
+      id: soundcoreStdout
+      waitForEnd: true
+    }
+    onExited: function (exitCode) {
+      root._jobEnded(exitCode, String(soundcoreStdout.text || ""))
+    }
+    // A command that fails to start emits no exited, only runningChanged, and
+    // would leave _currentJob set and every later refresh blocked. exited and
+    // runningChanged come from the same call, so by the deferred check exited
+    // has already cleared or replaced the job if it was going to.
+    onRunningChanged: {
+      if (running || root._currentJob === null) return
+      var job = root._currentJob
+      Qt.callLater(function () {
+        if (root._currentJob === job && !soundcoreProcess.running) root._jobEnded(-1, "")
+      })
     }
   }
 
