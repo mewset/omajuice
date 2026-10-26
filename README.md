@@ -25,10 +25,7 @@ it red when it gets low, and tells you before it becomes your problem.
 For Soundcore devices, the panel can show the ANC mode and the battery of each
 bud. This needs [openscq30](https://github.com/Oppzippy/OpenSCQ30):
 
-- Install `openscq30-cli-bin` from the AUR, or install the signed release
-  binary as `openscq30` on your `PATH`.
-  The shell has to see it on its own `PATH`: `/usr/bin` (the AUR package) works,
-  `~/.local/bin` only if the shell's environment includes it.
+- Install `openscq30-cli-bin` from the AUR.
 - Find the MAC with `bluetoothctl devices`, then register the device once:
   `openscq30 paired-devices add -a <MAC> -m <model>`.
   `openscq30 list-models` lists the models, for example `SoundcoreA3955` for
