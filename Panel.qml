@@ -24,6 +24,8 @@ Panel {
   property var hostWidget: null
   property var service: null
 
+  onOpenedChanged: if (root.opened && root.service) root.service.refreshSoundcore()
+
   readonly property var barIdentity: hostWidget || root
   readonly property var devices: service ? service.devices : []
   readonly property bool showAllDevices: setting("showAllDevices", false) === true
@@ -128,33 +130,95 @@ Panel {
         Repeater {
           model: root.devices
 
-          RowLayout {
-            id: deviceRow
+          ColumnLayout {
+            id: deviceItem
             required property var modelData
             Layout.fillWidth: true
-            spacing: Style.space(10)
+            spacing: Style.space(2)
 
-            Text {
+            readonly property bool detailed: modelData.connection === "Bluetooth" && Model.isAudioDevice(modelData)
+            readonly property string mac: detailed ? Model.macFromNativePath(modelData.nativePath) : ""
+            readonly property var details: detailed && root.service
+              ? Model.detailsFor(root.service.codecFor(modelData), root.service.soundcore[mac])
+              : { codec: "", mode: "", modeClickable: false, batteries: "" }
+
+            RowLayout {
               Layout.fillWidth: true
-              elide: Text.ElideRight
-              color: root.foreground
-              font.family: root.fontFamily
-              font.pixelSize: Style.font.body
-              text: deviceRow.modelData.model
+              spacing: Style.space(10)
+
+              Text {
+                Layout.fillWidth: true
+                elide: Text.ElideRight
+                color: root.foreground
+                font.family: root.fontFamily
+                font.pixelSize: Style.font.body
+                text: deviceItem.modelData.model
+              }
+
+              Text {
+                color: root.dim
+                font.family: root.fontFamily
+                font.pixelSize: Style.font.bodySmall
+                text: root.stateLabel(deviceItem.modelData)
+              }
+
+              Text {
+                color: deviceItem.modelData.percentage <= root.lowBatteryThreshold ? root.urgent : root.foreground
+                font.family: root.fontFamily
+                font.pixelSize: Style.font.body
+                text: deviceItem.modelData.percentage + "%"
+              }
+            }
+
+            RowLayout {
+              visible: deviceItem.details.codec !== "" || deviceItem.details.mode !== ""
+              Layout.fillWidth: true
+              spacing: 0
+
+              Text {
+                visible: deviceItem.details.codec !== ""
+                color: root.dim
+                font.family: root.fontFamily
+                font.pixelSize: Style.font.bodySmall
+                text: deviceItem.details.codec
+              }
+
+              Text {
+                visible: deviceItem.details.codec !== "" && deviceItem.details.mode !== ""
+                color: root.dim
+                font.family: root.fontFamily
+                font.pixelSize: Style.font.bodySmall
+                text: " \u00b7 "
+              }
+
+              Text {
+                id: modeText
+                visible: deviceItem.details.mode !== ""
+                color: deviceItem.details.modeClickable && modeArea.containsMouse ? root.foreground : root.dim
+                font.family: root.fontFamily
+                font.pixelSize: Style.font.bodySmall
+                font.underline: deviceItem.details.modeClickable
+                text: deviceItem.details.mode
+
+                MouseArea {
+                  id: modeArea
+                  anchors.fill: parent
+                  enabled: deviceItem.details.modeClickable
+                  hoverEnabled: true
+                  cursorShape: Qt.PointingHandCursor
+                  onClicked: root.service.cycleMode(deviceItem.mac)
+                }
+              }
             }
 
             Text {
+              visible: deviceItem.details.batteries !== ""
+              Layout.fillWidth: true
+              elide: Text.ElideRight
               color: root.dim
               font.family: root.fontFamily
               font.pixelSize: Style.font.bodySmall
-              text: root.stateLabel(deviceRow.modelData)
-            }
-
-            Text {
-              color: deviceRow.modelData.percentage <= root.lowBatteryThreshold ? root.urgent : root.foreground
-              font.family: root.fontFamily
-              font.pixelSize: Style.font.body
-              text: deviceRow.modelData.percentage + "%"
+              text: deviceItem.details.batteries
             }
           }
         }

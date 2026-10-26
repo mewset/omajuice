@@ -15,8 +15,24 @@ it red when it gets low, and tells you before it becomes your problem.
   the one you care about.
 - **It tells you when it matters.** Low battery, fully charged, and optionally
   when a device drops off.
+- **Codec and Soundcore details.** Bluetooth headsets show their codec, and
+  Soundcore devices can also show the ANC mode and per-bud battery.
 - **Nothing running in the background.** No daemon, no helper process, no
-  compiled dependency. It reads what your system already knows.
+  dependency required. It reads what your system already knows.
+
+## Soundcore details (optional)
+
+For Soundcore devices, the panel can show the ANC mode and the battery of each
+bud. This needs [openscq30](https://github.com/Oppzippy/OpenSCQ30):
+
+- Install `openscq30-cli-bin` from the AUR, or install the signed release
+  binary as `openscq30` on your `PATH`.
+- Register the device once: `openscq30 paired-devices add -a <MAC> -m <model>`.
+  `openscq30 list-models` lists the models, for example `SoundcoreA3955` for
+  the P40i.
+- Click the mode to cycle Noise cancelling, Transparency and Normal.
+- The details show "Mode unavailable" while the Soundcore phone app holds the
+  connection.
 
 ## Requirements
 
