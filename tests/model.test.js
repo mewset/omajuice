@@ -464,6 +464,12 @@ test("parseSettingValues flattens values and rejects empty output", () => {
   assert.equal(Model.parseSettingValues("not json"), null)
 })
 
+test("parseSettingValues returns null when no entry is valid", () => {
+  assert.equal(Model.parseSettingValues("[{}]"), null)
+  assert.equal(Model.parseSettingValues('[{"foo":1}]'), null)
+  assert.equal(Model.parseSettingValues('[{"settingId":"a","value":1}]'), null)
+})
+
 test("levelFromFifths converts the 0-5 scale", () => {
   assert.equal(Model.levelFromFifths("5/5"), 100)
   assert.equal(Model.levelFromFifths("4/5"), 80)

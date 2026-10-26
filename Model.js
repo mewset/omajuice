@@ -388,12 +388,14 @@ function parseSettingValues(text) {
   var list = parseJson(text)
   if (!Array.isArray(list) || list.length === 0) return null
   var values = {}
+  var accepted = 0
   for (var i = 0; i < list.length; i++) {
     var entry = list[i]
     if (!isPlainObject(entry) || typeof entry.settingId !== "string" || !isPlainObject(entry.value)) continue
     values[entry.settingId] = entry.value.value
+    accepted++
   }
-  return values
+  return accepted === 0 ? null : values
 }
 
 var AMBIENT_MODES = ["NoiseCanceling", "Transparency", "Normal"]
