@@ -152,6 +152,10 @@ Panel {
                 color: root.foreground
                 font.family: root.fontFamily
                 font.pixelSize: Style.font.body
+                // The model comes from the device's own Bluetooth name, so a
+                // peripheral could name itself "<img src=...>". AutoText would
+                // render that as rich text and fetch the image on panel open.
+                textFormat: Text.PlainText
                 text: deviceItem.modelData.model
               }
 
@@ -180,6 +184,7 @@ Panel {
                 color: root.dim
                 font.family: root.fontFamily
                 font.pixelSize: Style.font.bodySmall
+                textFormat: Text.PlainText
                 text: deviceItem.details.codec
               }
 
@@ -198,6 +203,7 @@ Panel {
                 font.family: root.fontFamily
                 font.pixelSize: Style.font.bodySmall
                 font.underline: deviceItem.details.modeClickable
+                textFormat: Text.PlainText
                 text: deviceItem.details.mode
 
                 MouseArea {
@@ -218,6 +224,7 @@ Panel {
               color: root.dim
               font.family: root.fontFamily
               font.pixelSize: Style.font.bodySmall
+              textFormat: Text.PlainText
               text: deviceItem.details.batteries
             }
           }
